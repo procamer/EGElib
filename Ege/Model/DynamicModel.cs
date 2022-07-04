@@ -6,16 +6,25 @@ using System.IO;
 
 namespace Ege.Model
 {
-    public class DynamicModel : DynamicMesh
+    public class DynamicModel : Mesh
     {
         internal Scene scene;
-        internal List<DynamicMesh> meshes = new List<DynamicMesh>();        
+        internal List<Mesh> meshes = new List<Mesh>();        
         internal List<Animation> animations = new List<Animation>();
         internal Node rootNode = new Node();        
         internal int time;
+        
+        string extention;
 
-        public DynamicModel(string file, PostProcessSteps postProcessSteps)
+        public DynamicModel(string file) : base(false)
         {
+            PostProcessSteps postProcessSteps = 
+                PostProcessSteps.Triangulate | 
+                PostProcessSteps.FlipUVs |
+                PostProcessSteps.CalculateTangentSpace | 
+                PostProcessSteps.GenerateSmoothNormals | 
+                PostProcessSteps.GenerateUVCoords;
+            
             LoadModel(file, postProcessSteps);
         }
 
@@ -31,7 +40,9 @@ namespace Ege.Model
                 return;
             }
 
+            extention = Path.GetExtension(file);
             Materials.directory = Path.GetDirectoryName(file);
+
             rootNode = scene.RootNode;
             ProcessNode();
             ProcessAnimations();
@@ -43,13 +54,13 @@ namespace Ege.Model
             {
                 for (int j = 0; j < scene.RootNode.Children[i].MeshCount; j++)
                 {
-                    Mesh mesh = scene.Meshes[scene.RootNode.Children[i].MeshIndices[j]];
+                    Assimp.Mesh mesh = scene.Meshes[scene.RootNode.Children[i].MeshIndices[j]];
                     meshes.Add(ProcessMesh(mesh));
                 }
             }
         }
 
-        private DynamicMesh ProcessMesh(Mesh mesh)
+        private Mesh ProcessMesh(Assimp.Mesh mesh)
         {
 
             // vertices
@@ -97,7 +108,7 @@ namespace Ege.Model
                 {
                     VertexWeight vw = bone.VertexWeights[w];
                     int access = vw.VertexID;
-                    DynamicMesh.Vertex vertex = vertices[access];
+                    Vertex vertex = vertices[access];
 
                     if (vertices[access].BoneID.X == 0 && vertices[access].BoneWeight.X == 0)
                     {
@@ -132,24 +143,31 @@ namespace Ege.Model
             // textures                    
             List<TextureInfo> textureInfos = new List<TextureInfo>();
             Material material = scene.Materials[mesh.MaterialIndex];
+            
             List<TextureInfo> diffuseMaps = material1.LoadMaterialTextures(material, TextureType.Diffuse);
             textureInfos.AddRange(diffuseMaps);
+            
             List<TextureInfo> specularMaps = material1.LoadMaterialTextures(material, TextureType.Specular);
             textureInfos.AddRange(specularMaps);
+
             List<TextureInfo> normalMaps = material1.LoadMaterialTextures(material, TextureType.Normals);
             textureInfos.AddRange(normalMaps);
-            //List<TextureInfo> heightMaps = returnMesh.materials.LoadMaterialTextures(material, TextureType.Ambient);
-            //textureInfos.AddRange(heightMaps);
-
-            DynamicMesh returnMesh = new DynamicMesh(vertices, indices, textureInfos);
-            returnMesh.boneTransforms = boneTransforms;            
+            
+            Mesh returnMesh = new Mesh(scene.HasAnimations)
+            {
+                vertices = vertices,
+                indices = indices,
+                textures = textureInfos,
+                boneTransforms = boneTransforms
+            };
+            returnMesh.InitGL();
             return returnMesh;
         }
 
         public void DrawAll(Shader shader)
         {
             time++;
-            foreach (DynamicMesh mesh in meshes)
+            foreach (Mesh mesh in meshes)
             {
                 UpdateAnimation(time / 30f, 0);
                 boneTransforms = mesh.boneTransforms;

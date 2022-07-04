@@ -8,16 +8,6 @@ namespace Ege
 	public class Skybox
 	{
 
-		readonly string[] faces =
-{
-			"Skybox/right.jpg",
-			"Skybox/left.jpg",
-			"Skybox/top.jpg",
-			"Skybox/bottom.jpg",
-			"Skybox/front.jpg",
-			"Skybox/back.jpg"
-		};
-
 		[Conditional("DEBUG")]
 		[DebuggerStepThrough]
 		public static void CheckLastError()
@@ -29,7 +19,7 @@ namespace Ege
 			}
 		}
 
-        readonly Texture _texture;
+		readonly Texture _texture;
 
 		private int VBO, VAO;
 
@@ -78,16 +68,24 @@ namespace Ege
 			 1.0f, -1.0f,  1.0f
 		};
 
-		public Skybox()
-		{		
-			if (faces.Length != 6)
-				throw new ArgumentException("Skybox tam olarak altı doku gerektirir.");
+		public Skybox(string skyboxFolder)
+		{
+			skyboxFolder = skyboxFolder + "/Skybox";
+			string[] faces = new string[]
+			{
+				skyboxFolder + "/right.jpg",
+				skyboxFolder + "/left.jpg",
+				skyboxFolder + "/top.jpg",
+				skyboxFolder + "/bottom.jpg",
+				skyboxFolder + "/front.jpg",
+				skyboxFolder + "/back.jpg"
+			};
 			_texture = new Texture(faces);
 			Init();
 		}
 
 		private void Init()
-        {
+		{
 			GL.GenVertexArrays(1, out VAO);
 			GL.GenBuffers(1, out VBO);
 			GL.BindVertexArray(VAO);

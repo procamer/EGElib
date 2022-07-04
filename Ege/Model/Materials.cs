@@ -13,9 +13,9 @@ namespace Ege.Model
         public List<TextureInfo> LoadMaterialTextures(Material mat, TextureType type)
         {
             List<TextureInfo> textures = new List<TextureInfo>();
-            for (int i = 0; i < mat.GetMaterialTextureCount((Assimp.TextureType)type); i++)
+            for (int i = 0; i < mat.GetMaterialTextureCount(type); i++)
             {
-                mat.GetMaterialTexture((Assimp.TextureType)type, i, out TextureSlot str);
+                mat.GetMaterialTexture(type, i, out TextureSlot str);
                 bool skip = false;
                 for (int j = 0; j < texturesLoaded.Count; j++)
                 {
@@ -35,6 +35,7 @@ namespace Ege.Model
                         Type = type,
                         Path = str.FilePath
                     };
+                    if (texture.Type == TextureType.Height) texture.Type = TextureType.Normals;
                     textures.Add(texture);
                     texturesLoaded.Add(texture);
                 }

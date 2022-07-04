@@ -6,13 +6,19 @@ using System.IO;
 
 namespace Ege.Model
 {
-    public class StaticModel : StaticMesh
+    public class StaticModel : Mesh
     {
         internal Scene scene;
-        internal readonly List<StaticMesh> meshes = new List<StaticMesh>();
-
-        public StaticModel(string file, PostProcessSteps postProcessSteps)
+        internal readonly List<Mesh> meshes = new List<Mesh>();        
+        
+        public StaticModel(string file): base(false)
         {
+            PostProcessSteps postProcessSteps =
+                PostProcessSteps.Triangulate |
+                PostProcessSteps.FlipUVs |
+                PostProcessSteps.CalculateTangentSpace |
+                PostProcessSteps.GenerateSmoothNormals;
+
             LoadModel(file, postProcessSteps);
         }
 
@@ -27,6 +33,7 @@ namespace Ege.Model
                 Console.WriteLine("ERROR::ASSIMP (StaticModel)");
                 return;
             }
+
             Materials.directory = Path.GetDirectoryName(file);
             ProcessNode();
         }
@@ -37,13 +44,13 @@ namespace Ege.Model
             {
                 for (int j = 0; j < scene.RootNode.Children[i].MeshCount; j++)
                 {
-                    Mesh mesh = scene.Meshes[scene.RootNode.Children[i].MeshIndices[j]];
+                    Assimp.Mesh mesh = scene.Meshes[scene.RootNode.Children[i].MeshIndices[j]];
                     meshes.Add(ProcessMesh(mesh));
                 }
             }
         }
 
-        private StaticMesh ProcessMesh(Mesh mesh)
+        private Mesh ProcessMesh(Assimp.Mesh mesh)
         {
             // vertices
             List<Vertex> vertices = new List<Vertex>();
@@ -84,21 +91,30 @@ namespace Ege.Model
             // textures                    
             List<TextureInfo> textureInfos = new List<TextureInfo>();
             Material material = scene.Materials[mesh.MaterialIndex];
+            
             List<TextureInfo> diffuseMaps = material1.LoadMaterialTextures(material, TextureType.Diffuse);
             textureInfos.AddRange(diffuseMaps);
+            
             List<TextureInfo> specularMaps = material1.LoadMaterialTextures(material, TextureType.Specular);
             textureInfos.AddRange(specularMaps);
+
             List<TextureInfo> normalMaps = material1.LoadMaterialTextures(material, TextureType.Height);
             textureInfos.AddRange(normalMaps);
-            //List<TextureInfo> heightMaps = returnMesh.materials.LoadMaterialTextures(material, TextureType.Ambient);
-            //textureInfos.AddRange(heightMaps);
             
-            return new StaticMesh(vertices,indices,textureInfos);
+
+            Mesh returnMesh = new Mesh(scene.HasAnimations)
+            {
+                vertices = vertices,
+                indices = indices,
+                textures = textureInfos,
+            };
+            returnMesh.InitGL();
+            return returnMesh;
         }
 
         public void DrawAll(Shader shader)
         {
-            foreach (StaticMesh mesh in meshes)
+            foreach (Mesh mesh in meshes)
             {
                 mesh.Draw(shader); 
             }

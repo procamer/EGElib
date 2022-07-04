@@ -2,43 +2,30 @@
 using OpenTK;
 using OpenTK.Graphics.OpenGL;
 using System.Collections.Generic;
-using PrimitiveType = OpenTK.Graphics.OpenGL.PrimitiveType;
 
 namespace Ege.Model
 {
     public class StaticMesh : Transform
     {
-        public struct Vertex
-        {
-            public Vector3 Position;
-            public Vector3 Normal;
-            public Vector2 TexCoords;
-            public Vector3 Tangent;
-            public Vector3 Bitangent;
+        public bool HasAnimations { get; set; }
 
-            public static int SizeInBytes() => Vector3.SizeInBytes * 4 + Vector2.SizeInBytes;
-        }
-
-        internal List<Vertex> vertices;
-        internal List<uint> indices;
-        internal List<TextureInfo> textures;
-        
+        internal List<Vertex> vertices = new List<Vertex>();
+        internal List<uint> indices = new List<uint>();
+        internal List<TextureInfo> textures = new List<TextureInfo>();
+        internal List<BoneTransform> boneTransforms = new List<BoneTransform>();
         internal Materials materials = new Materials();
 
-        private readonly int VAO;
-        private readonly int VBO;
-        private readonly int EBO;
+        private  int VAO;
+        private  int VBO;
+        private  int EBO;
 
-        public StaticMesh()
+        public StaticMesh(bool hasAnimations)
         {
+            HasAnimations = hasAnimations;
         }
 
-		public StaticMesh(List<Vertex> vertices, List<uint> indices, List<TextureInfo> textures)
-		{
-			this.vertices = vertices;
-			this.indices = indices;
-            this.textures = textures;
-			
+		public void InitGL()
+		{			
             // VAO
             VAO = GL.GenVertexArray();
             GL.BindVertexArray(VAO);
@@ -50,16 +37,23 @@ namespace Ege.Model
 
             // Attributes
             GL.EnableVertexAttribArray(0); // vertex.Positions
-            GL.EnableVertexAttribArray(1); // vertex.Normals
-            GL.EnableVertexAttribArray(2); // vertex.TexCoords
-            GL.EnableVertexAttribArray(3); // vertex.Tangents
-            GL.EnableVertexAttribArray(4); // vertex.Bitangents
-
             GL.VertexAttribPointer(0, 3, VertexAttribPointerType.Float, false, Vertex.SizeInBytes(), 0);
+            GL.EnableVertexAttribArray(1); // vertex.Normals
             GL.VertexAttribPointer(1, 3, VertexAttribPointerType.Float, false, Vertex.SizeInBytes(), sizeof(float) * 3);
+            GL.EnableVertexAttribArray(2); // vertex.TexCoords
             GL.VertexAttribPointer(2, 2, VertexAttribPointerType.Float, false, Vertex.SizeInBytes(), sizeof(float) * 6);
+            GL.EnableVertexAttribArray(3); // vertex.Tangents
             GL.VertexAttribPointer(3, 3, VertexAttribPointerType.Float, false, Vertex.SizeInBytes(), sizeof(float) * 8);
+            GL.EnableVertexAttribArray(4); // vertex.Bitangents
             GL.VertexAttribPointer(4, 3, VertexAttribPointerType.Float, false, Vertex.SizeInBytes(), sizeof(float) * 11);
+
+            if (HasAnimations)
+            {
+                GL.EnableVertexAttribArray(5); // vertex.BoneID
+                GL.VertexAttribPointer(5, 4, VertexAttribPointerType.Float, false, Vertex.SizeInBytes(), sizeof(float) * 14);
+                GL.EnableVertexAttribArray(6); // vertex.BoneWeight
+                GL.VertexAttribPointer(6, 4, VertexAttribPointerType.Float, false, Vertex.SizeInBytes(), sizeof(float) * 18);
+            }
 
             // EBO
             EBO = GL.GenBuffer();
@@ -89,10 +83,16 @@ namespace Ege.Model
                 GL.Uniform1(GL.GetUniformLocation(shader.Handle, number), i);
                 GL.BindTexture(TextureTarget.Texture2D, textures[i].Id);
             }
-            
+
+            if (HasAnimations)
+            {
+                for (int j = 0; j < boneTransforms.Count; j++)
+                    shader.SetMat4("boneTransform[" + j + "]", boneTransforms[j].GetTransformation());
+            }
+
             // Draw mesh
             GL.BindVertexArray(VAO);
-            GL.DrawElements(PrimitiveType.Triangles, indices.Count, DrawElementsType.UnsignedInt, 0);
+            GL.DrawElements(OpenTK.Graphics.OpenGL.PrimitiveType.Triangles, indices.Count, DrawElementsType.UnsignedInt, 0);
             GL.BindVertexArray(0);
             GL.ActiveTexture(TextureUnit.Texture0);
         }
