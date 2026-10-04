@@ -1,6 +1,9 @@
 ﻿#version 450 core
 
-#define NR_POINT_LIGHTS 11
+// NR_POINT_LIGHTS is injected by the application (Shader defines)
+#ifndef NR_POINT_LIGHTS
+#error NR_POINT_LIGHTS must be defined by the application
+#endif
 #define MAX_BONE 50
 #define MAX_WEIGHTS 4
 
@@ -40,22 +43,25 @@ uniform PointLight pointLights[NR_POINT_LIGHTS];
 void main()
 {            
 	mat4 boneTransformation = mat4(0.0) ;
-	vec4 normalizedWeight = normalize(weight);    
+	// weights must sum to 1 (not unit length), otherwise vertices get scaled
+	vec4 normalizedWeight = weight / max(dot(weight, vec4(1.0)), 0.0001);
 	for(int i =0; i<MAX_WEIGHTS;i++)
-		boneTransformation += boneTransform[uint(bone_id[i])] * normalizedWeight[i];	            
-	
-	vec4 worldPosition = transformationMatrix * boneTransformation * vec4(position, 1.0);
-	gl_Position =projectionMatrix * viewMatrix * worldPosition;   	
-    FragPos = worldPosition.xyz;	
+		boneTransformation += boneTransform[uint(bone_id[i])] * normalizedWeight[i];
+
+	mat4 model = transformationMatrix * boneTransformation;
+	vec4 worldPosition = model * vec4(position, 1.0);
+	gl_Position =projectionMatrix * viewMatrix * worldPosition;
+    FragPos = worldPosition.xyz;
     TexCoord = texCoord;
-    
-    vec3 T = normalize(vec3(transformationMatrix * vec4(tangent, 0.0)));
-	vec3 B = normalize(vec3(transformationMatrix * vec4(bitangent, 0.0)));
-	vec3 N = normalize(vec3(transformationMatrix * vec4(normal, 0.0)));	
-	mat3 TBN = mat3(T, B, N);	
-		
-	TangentFragPos = TBN * FragPos;
-	TangentViewPos = TBN * cameraPos;
+
+    vec3 T = normalize(vec3(model * vec4(tangent, 0.0)));
+	vec3 B = normalize(vec3(model * vec4(bitangent, 0.0)));
+	vec3 N = normalize(vec3(model * vec4(normal, 0.0)));
+	mat3 TBN = mat3(T, B, N);
+
+	// world -> tangent space (same as staticV.glsl)
+	TangentFragPos = FragPos * TBN;
+	TangentViewPos = cameraPos * TBN;
 	for(int i = 0; i < NR_POINT_LIGHTS; i++)
-		TangentLightPos[i] = TBN * pointLights[i].position;	
+		TangentLightPos[i] = pointLights[i].position * TBN;
 }

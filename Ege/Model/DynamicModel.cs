@@ -1,185 +1,41 @@
 ﻿using Assimp;
 using OpenTK;
-using System;
 using System.Collections.Generic;
-using System.IO;
+using System.Diagnostics;
 
 namespace Ege.Model
 {
-    public class DynamicModel : Mesh
+    public class DynamicModel : Model
     {
-        internal Scene scene;
-        internal List<Mesh> meshes = new List<Mesh>();        
-        internal List<Animation> animations = new List<Animation>();
-        internal Node rootNode = new Node();        
-        internal int time;
-        
-        string extention;
+        internal readonly List<Animation> animations = new List<Animation>();
+        private readonly Stopwatch clock = Stopwatch.StartNew();
 
-        public DynamicModel(string file) : base(false)
-        {
-            PostProcessSteps postProcessSteps = 
-                PostProcessSteps.Triangulate | 
+        // bone list of the mesh currently being animated
+        private List<BoneTransform> currentBones = new List<BoneTransform>();
+
+        public DynamicModel(string file)
+            : base(file,
+                PostProcessSteps.Triangulate |
                 PostProcessSteps.FlipUVs |
-                PostProcessSteps.CalculateTangentSpace | 
-                PostProcessSteps.GenerateSmoothNormals | 
-                PostProcessSteps.GenerateUVCoords;
-            
-            LoadModel(file, postProcessSteps);
+                PostProcessSteps.CalculateTangentSpace |
+                PostProcessSteps.GenerateSmoothNormals |
+                PostProcessSteps.GenerateUVCoords,
+                TextureType.Normals)
+        {
+            if (IsLoaded)
+                animations.AddRange(scene.Animations);
         }
 
-        private void LoadModel(string file, PostProcessSteps postProcessSteps)
+        public override void DrawAll(Shader shader)
         {
-            AssimpContext importer = new AssimpContext();
-            scene = importer.ImportFile(file, postProcessSteps);
-
-            if (scene == null || scene.RootNode == null ||
-                (scene.SceneFlags & SceneFlags.Incomplete) == SceneFlags.Incomplete)
-            {
-                Console.WriteLine("ERROR::ASSIMP (DynamicModel)");
-                return;
-            }
-
-            extention = Path.GetExtension(file);
-            Materials.directory = Path.GetDirectoryName(file);
-
-            rootNode = scene.RootNode;
-            ProcessNode();
-            ProcessAnimations();
-        }
-
-        private void ProcessNode()
-        {
-            for (int i = 0; i < scene.RootNode.ChildCount; i++)
-            {
-                for (int j = 0; j < scene.RootNode.Children[i].MeshCount; j++)
-                {
-                    Assimp.Mesh mesh = scene.Meshes[scene.RootNode.Children[i].MeshIndices[j]];
-                    meshes.Add(ProcessMesh(mesh));
-                }
-            }
-        }
-
-        private Mesh ProcessMesh(Assimp.Mesh mesh)
-        {
-
-            // vertices
-            List<Vertex> vertices = new List<Vertex>();
-            for (int i = 0; i < mesh.VertexCount; i++)
-            {
-                Vertex vertex = new Vertex
-                {
-                    Position = Maths.ConvertVector3(mesh.Vertices[i]),
-                    Normal = Maths.ConvertVector3(mesh.Normals[i]),
-                    Tangent = Maths.ConvertVector3(mesh.Tangents[i]),
-                    Bitangent = Maths.ConvertVector3(mesh.BiTangents[i])
-                };
-
-                if (mesh.HasTextureCoords(0))
-                {
-                    vertex.TexCoords = Maths.ConvertVector2(mesh.TextureCoordinateChannels[0][i]);
-                }
-                else
-                {
-                    vertex.TexCoords = Vector2.Zero;
-                }
-                vertices.Add(vertex);
-            }
-
-            // indices
-            List<uint> indices = new List<uint>();
-            for (int i = 0; i < mesh.FaceCount; i++)
-            {
-                Face face = mesh.Faces[i];
-                for (int j = 0; j < face.IndexCount; j++)
-                    indices.Add((uint)face.Indices[j]);
-            }
-
-            // bones
-            List<BoneTransform> boneTransforms = new List<BoneTransform>();
-            for (int b = 0; b < mesh.BoneCount; b++)
-            {
-                // Bone.BoneTransform
-                Bone bone = mesh.Bones[b];
-                boneTransforms.Add(new BoneTransform(bone.Name, Maths.ConvertMatrix(bone.OffsetMatrix)));
-
-                // Vertices.VertexWeight
-                for (int w = 0; w < bone.VertexWeightCount; w++)
-                {
-                    VertexWeight vw = bone.VertexWeights[w];
-                    int access = vw.VertexID;
-                    Vertex vertex = vertices[access];
-
-                    if (vertices[access].BoneID.X == 0 && vertices[access].BoneWeight.X == 0)
-                    {
-                        vertex.BoneID.X = b;
-                        vertex.BoneWeight.X = vw.Weight;
-                        vertices[access] = vertex;
-                    }
-                    else if (vertices[access].BoneID.Y == 0 && vertices[access].BoneWeight.Y == 0)
-                    {
-                        vertex.BoneID.Y = b;
-                        vertex.BoneWeight.Y = vw.Weight;
-                        vertices[access] = vertex;
-                    }
-                    else if (vertices[access].BoneID.Z == 0 && vertices[access].BoneWeight.Z == 0)
-                    {
-                        vertex.BoneID.Z = b;
-                        vertex.BoneWeight.Z = vw.Weight;
-                        vertices[access] = vertex;
-                    }
-                    else
-                    {
-                        vertex.BoneID.W = b;
-                        vertex.BoneWeight.W = vw.Weight;
-                        vertices[access] = vertex;
-                    }
-                }
-            }
-
-
-            Materials material1 = new Materials();
-
-            // textures                    
-            List<TextureInfo> textureInfos = new List<TextureInfo>();
-            Material material = scene.Materials[mesh.MaterialIndex];
-            
-            List<TextureInfo> diffuseMaps = material1.LoadMaterialTextures(material, TextureType.Diffuse);
-            textureInfos.AddRange(diffuseMaps);
-            
-            List<TextureInfo> specularMaps = material1.LoadMaterialTextures(material, TextureType.Specular);
-            textureInfos.AddRange(specularMaps);
-
-            List<TextureInfo> normalMaps = material1.LoadMaterialTextures(material, TextureType.Normals);
-            textureInfos.AddRange(normalMaps);
-            
-            Mesh returnMesh = new Mesh(scene.HasAnimations)
-            {
-                vertices = vertices,
-                indices = indices,
-                textures = textureInfos,
-                boneTransforms = boneTransforms
-            };
-            returnMesh.InitGL();
-            return returnMesh;
-        }
-
-        public void DrawAll(Shader shader)
-        {
-            time++;
+            float seconds = (float)clock.Elapsed.TotalSeconds;
             foreach (Mesh mesh in meshes)
             {
-                UpdateAnimation(time / 30f, 0);
-                boneTransforms = mesh.boneTransforms;
+                // UpdateAnimation fills the bone list of the mesh about to be drawn
+                currentBones = mesh.boneTransforms;
+                UpdateAnimation(seconds, 0);
                 mesh.Draw(shader);
             }
-        }
-
-        // Animation
-        private void ProcessAnimations()
-        {
-            for (int i = 0; i < scene.AnimationCount; i++)
-                animations.Add(scene.Animations[i]);
         }
 
         private void UpdateAnimation(float time, int animationIndex)
@@ -190,7 +46,7 @@ namespace Ege.Model
                 float tickPerSecond = target.TicksPerSecond != 0 ? (float)target.TicksPerSecond : 60.0f;
                 float ticks = time * tickPerSecond;
                 float animationTime = ticks % (float)target.DurationInTicks;
-                ProcessNode(target, animationTime, rootNode, Matrix4.Identity);
+                ProcessNode(target, animationTime, scene.RootNode, Matrix4.Identity);
             }
         }
 
@@ -330,7 +186,7 @@ namespace Ege.Model
 
         private BoneTransform FindBone(string nodeName)
         {
-            foreach (BoneTransform b in boneTransforms)
+            foreach (BoneTransform b in currentBones)
                 if (b.GetName().Equals(nodeName)) return b;
             return null;
         }

@@ -1,24 +1,11 @@
 ﻿using System;
-using System.Diagnostics;
 using OpenTK.Graphics.OpenGL;
 using Ege.Model;
 
 namespace Ege
 {
-	public class Skybox
+	public class Skybox : IDisposable
 	{
-
-		[Conditional("DEBUG")]
-		[DebuggerStepThrough]
-		public static void CheckLastError()
-		{
-			ErrorCode errorCode = GL.GetError();
-			if (errorCode != ErrorCode.NoError)
-			{
-				throw new Exception(errorCode.ToString());
-			}
-		}
-
 		readonly Texture _texture;
 
 		private int VBO, VAO;
@@ -101,9 +88,16 @@ namespace Ege
 			GL.BindVertexArray(VAO);
 			GL.ActiveTexture(TextureUnit.Texture0);
 			GL.BindTexture(TextureTarget.TextureCubeMap, _texture.Handle);
-			GL.DrawArrays(PrimitiveType.Triangles, 0, vertices.Length);
+			GL.DrawArrays(PrimitiveType.Triangles, 0, vertices.Length / 3);
 			GL.BindVertexArray(0);
 			GL.DepthFunc(DepthFunction.Less);
+		}
+
+		public void Dispose()
+		{
+			GL.DeleteVertexArray(VAO);
+			GL.DeleteBuffer(VBO);
+			_texture.Dispose();
 		}
 	}
 }

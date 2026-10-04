@@ -1,79 +1,51 @@
-﻿using Assimp;
+using Assimp;
+using OpenTK.Graphics.OpenGL;
 using System;
 using System.Collections.Generic;
 
 namespace Ege.Model
 {
-    public class Materials
+    public static class Materials
     {
-        public static string directory;
-        public List<TextureInfo> textureInfos;
-        private static readonly List<TextureInfo> texturesLoaded = new List<TextureInfo>();
+        // shared by every model, keyed by full file path
+        private static readonly Dictionary<string, TextureInfo> texturesLoaded = new Dictionary<string, TextureInfo>();
 
-        public List<TextureInfo> LoadMaterialTextures(Material mat, TextureType type)
+        public static List<TextureInfo> LoadMaterialTextures(Material mat, TextureType type, string directory)
         {
             List<TextureInfo> textures = new List<TextureInfo>();
             for (int i = 0; i < mat.GetMaterialTextureCount(type); i++)
             {
                 mat.GetMaterialTexture(type, i, out TextureSlot str);
-                bool skip = false;
-                for (int j = 0; j < texturesLoaded.Count; j++)
-                {
-                    if (texturesLoaded[j].Path == str.FilePath)
-                    {
-                        textures.Add(texturesLoaded[j]);
-                        skip = true;
-                        break;
-                    }
-                }
-                if (!skip)
+                string fullPath = System.IO.Path.Combine(directory, str.FilePath);
+
+                if (!texturesLoaded.TryGetValue(fullPath, out TextureInfo texture))
                 {
                     Console.WriteLine(str.TextureType + " -- " + str.FilePath);
-                    TextureInfo texture = new TextureInfo
+                    texture = new TextureInfo
                     {
-                        Id = TextureFromFile(str.FilePath, directory),
-                        Type = type,
+                        Id = new Texture(fullPath).Handle,
+                        Type = type == TextureType.Height ? TextureType.Normals : type,
                         Path = str.FilePath
                     };
-                    if (texture.Type == TextureType.Height) texture.Type = TextureType.Normals;
-                    textures.Add(texture);
-                    texturesLoaded.Add(texture);
+                    texturesLoaded.Add(fullPath, texture);
                 }
+                textures.Add(texture);
             }
             return textures;
         }
 
-        private uint TextureFromFile(string path, string directory)
+        public static void DeleteLoadedTextures()
         {
-            string tPath = System.IO.Path.Combine(directory, path);
-            Texture t = new Texture(tPath);
-
-            return t.Handle;
+            foreach (TextureInfo texture in texturesLoaded.Values)
+                GL.DeleteTexture(texture.Id);
+            texturesLoaded.Clear();
         }
-
     }
-}
 
-//public enum TextureType
-//{
-//    None = 0,
-//    Diffuse = 1,
-//    Specular = 2,
-//    Ambient = 3,
-//    Emissive = 4,
-//    Height = 5,
-//    Normals = 6,
-//    Shininess = 7,
-//    Opacity = 8,
-//    Displacement = 9,
-//    Lightmap = 10,
-//    Reflection = 11,
-//    Unknown = 12
-//}
-
-public struct TextureInfo
-{
-    public uint Id { get; set; }
-    public TextureType Type { get; set; }
-    public string Path { get; set; }
+    public struct TextureInfo
+    {
+        public uint Id { get; set; }
+        public TextureType Type { get; set; }
+        public string Path { get; set; }
+    }
 }

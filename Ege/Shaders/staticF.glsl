@@ -1,6 +1,9 @@
 ﻿#version 450 core
 
-#define NR_POINT_LIGHTS 11
+// NR_POINT_LIGHTS is injected by the application (Shader defines)
+#ifndef NR_POINT_LIGHTS
+#error NR_POINT_LIGHTS must be defined by the application
+#endif
 
 struct PointLight
 {
@@ -49,13 +52,13 @@ float getCurrentDepth(vec3 fragToLight)
 }
 
 //---------------------------------------
-vec3 CalcPointLight(int i)
-{
+vec3 CalcPointLight(int i, float shadow)
+{    
 	vec3 diffuseColor = vec3(texture(texture_diffuse1, TexCoord));
 	vec3 specularColor = vec3(texture(texture_specular1, TexCoord));	
 	vec3 normalColor = vec3(texture(texture_normal1, TexCoord));
 	normalColor = normalize(normalColor * 2.0 - 1.0);
-	
+
 	// ambient
     vec3 ambient = pointLights[i].ambient * diffuseColor;
 
@@ -70,33 +73,32 @@ vec3 CalcPointLight(int i)
 	vec3 halfwayDir = normalize(lightDir + viewDir);      
 	float spec = pow(max(dot(halfwayDir,normalColor), 0.0), materialshininess);
     vec3 specular = pointLights[i].specular * spec * specularColor;
-	
+
 	// attenuation
     float distance = length(TangentLightPos[i] - TangentFragPos);
     float attenuation = 1.0 / (pointLights[i].constant + pointLights[i].linear * distance + pointLights[i].quadratic * (distance * distance));    
-
-	// combine results
+    
+	// combine results: shadow only blocks direct light, ambient still reaches the fragment
     ambient *= attenuation;
     diffuse *= attenuation;
     specular *= attenuation;
-    return (ambient + diffuse + specular);
+    return ambient + shadow * (diffuse + specular);
 }
 
+//-----------
 void main()
-{		
+{
 	if(texture(texture_diffuse1, TexCoord).a < 0.1) discard;
 	
-	vec3 finalResult = vec3(0);			
+	vec3 finalResult = vec3(0);	
 	for(int i = 0; i < NR_POINT_LIGHTS; i++)
 	{
-		vec3 result = vec3(0);
-		result += CalcPointLight(i);
-
 		vec3 fragToLight = FragPos - pointLights[i].position;
-		float closestDepth = texture(depthMaps[i], fragToLight).b;
-		float shadow = getCurrentDepth(fragToLight) - 0.001 < closestDepth ? 1 : 0;
-
-		finalResult += result * 2; //* max(0.0,  shadow) ;
+		float closestDepth = texture(depthMaps[i], fragToLight).r;
+		float shadow = getCurrentDepth(fragToLight) - 0.0001 < closestDepth ? 1.0 : 0.0;
+		finalResult += CalcPointLight(i, shadow) * 2;
 	}	
 	FragColor = vec4(finalResult, 1);	
 }
+
+

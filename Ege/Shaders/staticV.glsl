@@ -6,7 +6,10 @@ layout (location = 2) in vec2 texCoord;
 layout (location = 3) in vec3 tangent;
 layout (location = 4) in vec3 bitangent;
 
-#define NR_POINT_LIGHTS 11
+// NR_POINT_LIGHTS is injected by the application (Shader defines)
+#ifndef NR_POINT_LIGHTS
+#error NR_POINT_LIGHTS must be defined by the application
+#endif
 
 struct PointLight
 {

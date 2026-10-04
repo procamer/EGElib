@@ -1,6 +1,7 @@
 ﻿using Assimp;
 using OpenTK;
 using OpenTK.Graphics.OpenGL;
+using System;
 using System.Collections.Generic;
 
 namespace Ege.Model
@@ -18,7 +19,7 @@ namespace Ege.Model
         public static int SizeInBytes() => Vector3.SizeInBytes * 4 + Vector2.SizeInBytes + Vector4.SizeInBytes * 2;
     }
 
-    public class Mesh : Transform
+    public class Mesh : IDisposable
     {
         public bool HasAnimations { get; set ; }
 
@@ -26,11 +27,11 @@ namespace Ege.Model
         internal List<uint> indices = new List<uint>();
         internal List<TextureInfo> textures = new List<TextureInfo>();        
         internal List<BoneTransform> boneTransforms = new List<BoneTransform>();
-        internal Materials materials = new Materials();
 
-        private  int VAO;
-        private  int VBO;
-        private  int EBO;
+        private int VAO;
+        private int VBO;
+        private int EBO;
+        private bool disposed;
 
         public Mesh(bool hasAnimations)
         {
@@ -94,7 +95,7 @@ namespace Ege.Model
                 else if (name == TextureType.Specular) number = "texture_specular" + specularNr++.ToString();
                 else if (name == TextureType.Normals) number = "texture_normal" + normalNr++.ToString();
 
-                GL.Uniform1(GL.GetUniformLocation(shader.Handle, number), i);
+                shader.SetInt(number, i);
                 GL.BindTexture(TextureTarget.Texture2D, textures[i].Id);
             }
 
@@ -111,6 +112,13 @@ namespace Ege.Model
             GL.ActiveTexture(TextureUnit.Texture0);
         }
 
+        public void Dispose()
+        {
+            if (disposed) return;
+            GL.DeleteVertexArray(VAO);
+            GL.DeleteBuffer(VBO);
+            GL.DeleteBuffer(EBO);
+            disposed = true;
+        }
     }
-
 }

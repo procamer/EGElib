@@ -13,17 +13,7 @@ namespace Demo
 {
     public sealed class Window : GameWindow
     {
-        Shader skyboxShader;
-        Skybox skybox;
-
-        Shader sponzaShader;
-        StaticModel sponza;
-
-        Shader bobShader;
-        DynamicModel bob;
-
-        Shader depthShader;
-        Texture shadow;
+        World world;
 
         Camera camera;
         List<PointLight> pointLights = new List<PointLight>
@@ -129,26 +119,19 @@ namespace Demo
             GL.Enable(EnableCap.DepthTest);
             GL.Enable(EnableCap.CullFace);
 
+            GL.ClearColor(Color.Black);
+
             string EntitiesFolder = "../../../Entities";
 
-            // shaders
-            skyboxShader = new Shader("Shaders/skyboxV.glsl", "Shaders/skyboxF.glsl");
-            bobShader = new Shader("Shaders/skeletalV.glsl", "Shaders/staticF.glsl");
-            sponzaShader = new Shader("Shaders/staticV.glsl", "Shaders/staticF.glsl");
-            depthShader = new Shader("Shaders/depthV.glsl", "Shaders/depthF.glsl", "Shaders/depthG.glsl");
-
-            shadow = new Texture(pointLights.ToArray());
-
-            // skybox
-            skybox = new Skybox(EntitiesFolder);
-
-            // models
-            sponza = new StaticModel(EntitiesFolder + "/sponza/sponza.obj");
-            bob = new DynamicModel(EntitiesFolder + "/bob/bob_lamp_update_export.md5mesh")
+            world = new World(pointLights);
+            world.SetSkybox(new Skybox(EntitiesFolder));
+            world.Add(new StaticModel(EntitiesFolder + "/sponza/sponza.obj"));
+            world.Add(new DynamicModel(EntitiesFolder + "/bob/bob_lamp_update_export.md5mesh")
             {
                 Scale = new Vector3(30f),
                 Position = new Vector3(600f, 0f, -200f)
-            };
+            });
+            world.EnableShadows();
 
             // camera
             camera = new Camera(new Vector3(0, 170, 0))
@@ -162,8 +145,6 @@ namespace Demo
                 Pitch = 0f
             };
 
-            SetShadowMaps();
-
             WindowState = WindowState.Maximized;
         }
 
@@ -171,31 +152,9 @@ namespace Demo
         {
             base.OnRenderFrame(e);
             Title = $"(Vsync: {VSync}) FPS: {1f / e.Time:0}";
+
             GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
-
-            skyboxShader.SetMat4("viewMatrix", new Matrix4(new Matrix3(camera.ViewMatrix())));
-            skyboxShader.SetMat4("projectionMatrix", camera.ProjectionMatrix());
-            skyboxShader.SetInt("cubeTexture", 0);
-            skyboxShader.Use();
-            skybox.Draw();
-
-            sponzaShader.SetMat4("transformationMatrix", sponza.TransformationMatrix());
-            sponzaShader.SetMat4("viewMatrix", camera.ViewMatrix());
-            sponzaShader.SetMat4("projectionMatrix", camera.ProjectionMatrix());
-            sponzaShader.SetVec3("cameraPos", camera.Position);
-            for (int i = 0; i < pointLights.Count; i++)
-                pointLights[i].Set(sponzaShader, i);
-            sponzaShader.Use();
-            sponza.DrawAll(sponzaShader);
-
-            bobShader.SetMat4("transformationMatrix", bob.TransformationMatrix());
-            bobShader.SetMat4("viewMatrix", camera.ViewMatrix());
-            bobShader.SetMat4("projectionMatrix", camera.ProjectionMatrix());
-            bobShader.SetVec3("cameraPos", camera.Position);
-            for (int i = 0; i < pointLights.Count; i++)
-                pointLights[i].Set(bobShader, i);
-            bobShader.Use();
-            bob.DrawAll(bobShader);
+            world.Draw(camera);
 
             Context.SwapBuffers();
         }
@@ -263,7 +222,7 @@ namespace Demo
             GL.BindBuffer(BufferTarget.ArrayBuffer, 0);
             GL.BindVertexArray(0);
             GL.UseProgram(0);
-            skyboxShader.Dispose();
+            world.Dispose();
             base.OnUnload(e);
         }
 
@@ -276,70 +235,6 @@ namespace Demo
                 WindowState = WindowState == WindowState.Normal ? WindowState.Fullscreen : WindowState.Normal;
             if (e.Key == Key.ControlLeft)
                 CursorVisible = !CursorVisible;
-        }
-
-        private void SetShadowMaps()
-        {
-
-            float far_plane = 3000f;
-
-            GL.ClearColor(Color.Black);
-            GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
-            GL.Viewport(0, 0, shadow.shadowWidth, shadow.shadowHeight);
-
-            Matrix4 shadowProj = Matrix4.CreatePerspectiveFieldOfView(MathHelper.DegreesToRadians(90.0f),
-                shadow.shadowWidth / (float)shadow.shadowHeight, 0.1f, far_plane);
-
-            depthShader.SetFloat("far_plane", far_plane);
-
-            for (int i = 0; i < pointLights.Count; i++)
-            {
-                GL.BindFramebuffer(FramebufferTarget.Framebuffer, shadow.FBO[i]);
-                GL.Clear(ClearBufferMask.DepthBufferBit);
-                Vector3 lightPos = pointLights[i].position;
-                Matrix4[] shadowTransforms = new Matrix4[]
-                {
-                    Matrix4.LookAt(lightPos, lightPos + new Vector3(1.0f, 0.0f, 0.0f), new Vector3(0.0f, -1.0f, 0.0f)) * shadowProj,
-                    Matrix4.LookAt(lightPos, lightPos + new Vector3(-1.0f, 0.0f, 0.0f), new Vector3(0.0f, -1.0f, 0.0f)) * shadowProj,
-                    Matrix4.LookAt(lightPos, lightPos + new Vector3(0.0f, 1.0f, 0.0f), new Vector3(0.0f, 0.0f, 1.0f)) * shadowProj,
-                    Matrix4.LookAt(lightPos, lightPos + new Vector3(0.0f, -1.0f, 0.0f), new Vector3(0.0f, 0.0f, -1.0f)) * shadowProj,
-                    Matrix4.LookAt(lightPos, lightPos + new Vector3(0.0f, 0.0f, 1.0f), new Vector3(0.0f, -1.0f, 0.0f)) * shadowProj,
-                    Matrix4.LookAt(lightPos, lightPos + new Vector3(0.0f, 0.0f, -1.0f), new Vector3(0.0f, -1.0f, 0.0f)) * shadowProj
-                };
-
-                GL.Enable(EnableCap.PolygonOffsetFill);
-                GL.PolygonOffset(1.1f, 1.1f);
-
-                for (int z = 0; z < 6; ++z)
-                    depthShader.SetMat4("shadowMatrices[" + z + "]", shadowTransforms[z]);
-                depthShader.SetVec3("lightPos", lightPos);
-
-                depthShader.Use();
-                depthShader.SetMat4("transformationMatrix", sponza.TransformationMatrix());
-                sponza.DrawAll(depthShader);
-
-                depthShader.Use();
-                depthShader.SetMat4("transformationMatrix", bob.TransformationMatrix());
-                bob.DrawAll(depthShader);
-
-                GL.Disable(EnableCap.PolygonOffsetFill);
-                GL.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
-
-                sponzaShader.Use();
-                sponzaShader.SetMat4("cubeProjection", shadowProj);
-                GL.ActiveTexture(TextureUnit.Texture10 + i);
-                GL.BindTexture(TextureTarget.TextureCubeMap, shadow.shadowCubemaps[i]);
-                sponzaShader.SetInt("depthMaps[" + i + "]", 10 + i);
-                GL.DeleteFramebuffer(shadow.FBO[i]);
-
-                bobShader.Use();
-                bobShader.SetMat4("cubeProjection", shadowProj);
-                GL.ActiveTexture(TextureUnit.Texture10 + i);
-                GL.BindTexture(TextureTarget.TextureCubeMap, shadow.shadowCubemaps[i]);
-                bobShader.SetInt("depthMaps[" + i + "]", 10 + i);
-                GL.DeleteFramebuffer(shadow.FBO[i]);
-
-            }
         }
     }
 }

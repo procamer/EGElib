@@ -7,19 +7,10 @@ using PixelFormat = OpenTK.Graphics.OpenGL.PixelFormat;
 
 namespace Ege.Model
 {
-    public class Texture
+    public class Texture : IDisposable
     {
         public readonly uint Handle;
-        
-        // shadow
-        public int shadowWidth => width;
-        public int shadowHeight => height;
-
-        public int[] shadowCubemaps;
-        public int[] FBO;
-
-        private int width = 512;
-        private int height = 512;
+        private bool disposed;
 
         public Texture(string filename)
         {
@@ -64,43 +55,6 @@ namespace Ege.Model
             GL.TexParameter(TextureTarget.TextureCubeMap, TextureParameterName.TextureWrapR, (int)TextureWrapMode.ClampToEdge);
         }
 
-        public Texture(PointLight[] lights)
-        {
-            shadowCubemaps = new int[lights.Length];
-            FBO = new int[lights.Length];
-            for (int i = 0; i < lights.Length; i++)
-            {
-                GL.GenTextures(1, out shadowCubemaps[i]);
-                GL.BindTexture(TextureTarget.TextureCubeMap, shadowCubemaps[i]);
-                for (int index = 0; index < 6; index++)
-                {
-                    GL.TexImage2D(
-                        TextureTarget.TextureCubeMapPositiveX + index,
-                        0,
-                        PixelInternalFormat.DepthComponent32f,
-                        shadowWidth,
-                        shadowHeight, 0,
-                        PixelFormat.DepthComponent,
-                        PixelType.Float,
-                        IntPtr.Zero);
-                }
-
-                GL.TexParameter(TextureTarget.TextureCubeMap, TextureParameterName.TextureMagFilter, (int)TextureMagFilter.Linear);
-                GL.TexParameter(TextureTarget.TextureCubeMap, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.Linear);
-                
-                GL.TexParameter(TextureTarget.TextureCubeMap, TextureParameterName.TextureWrapS, (int)TextureWrapMode.ClampToEdge);
-                GL.TexParameter(TextureTarget.TextureCubeMap, TextureParameterName.TextureWrapT, (int)TextureWrapMode.ClampToEdge);
-                GL.TexParameter(TextureTarget.TextureCubeMap, TextureParameterName.TextureWrapR, (int)TextureWrapMode.ClampToEdge);
-
-                FBO[i] = GL.GenFramebuffer();
-                GL.BindFramebuffer(FramebufferTarget.Framebuffer, FBO[i]);
-                GL.FramebufferTexture(FramebufferTarget.Framebuffer, FramebufferAttachment.DepthAttachment, shadowCubemaps[i], 0);
-                GL.DrawBuffer(DrawBufferMode.None);
-                GL.ReadBuffer(ReadBufferMode.None);
-                GL.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
-            }
-        }
-
         internal void LoadBitmap(string filename)
         {
             using (Bitmap image = new Bitmap(filename))
@@ -110,9 +64,7 @@ namespace Ege.Model
                     ImageLockMode.ReadOnly,
                     System.Drawing.Imaging.PixelFormat.Format32bppArgb);
 
-                if (data.Scan0 != null)
-                {
-                    GL.TexImage2D(TextureTarget.Texture2D,
+                GL.TexImage2D(TextureTarget.Texture2D,
                     0,
                     PixelInternalFormat.Rgba,
                     image.Width,
@@ -121,11 +73,8 @@ namespace Ege.Model
                     PixelFormat.Bgra,
                     PixelType.UnsignedByte,
                     data.Scan0);
-                }
-                else
-                {
-                    throw new Exception("Doku yükleme başarısız oldu!");
-                }
+
+                image.UnlockBits(data);
             }
         }
 
@@ -138,22 +87,17 @@ namespace Ege.Model
                     ImageLockMode.ReadOnly,
                     System.Drawing.Imaging.PixelFormat.Format24bppRgb);
 
-                if (data.Scan0 != null)
-                {
-                    GL.TexImage2D(TextureTarget.TextureCubeMapPositiveX + index,
-                        0,
-                        PixelInternalFormat.Rgb,
-                        image.Width,
-                        image.Height,
-                        0,
-                        PixelFormat.Bgr,
-                        PixelType.UnsignedByte,
-                        data.Scan0);
-                }
-                else
-                {
-                    throw new Exception("Doku yükleme başarısız oldu!");
-                }
+                GL.TexImage2D(TextureTarget.TextureCubeMapPositiveX + index,
+                    0,
+                    PixelInternalFormat.Rgb,
+                    image.Width,
+                    image.Height,
+                    0,
+                    PixelFormat.Bgr,
+                    PixelType.UnsignedByte,
+                    data.Scan0);
+
+                image.UnlockBits(data);
             }
         }
 
@@ -166,9 +110,7 @@ namespace Ege.Model
                 ImageLockMode.ReadOnly,
                 System.Drawing.Imaging.PixelFormat.Format32bppArgb);
 
-                if (data.Scan0 != null)
-                {
-                    GL.TexImage2D(TextureTarget.Texture2D,
+                GL.TexImage2D(TextureTarget.Texture2D,
                     0,
                     PixelInternalFormat.Rgba,
                     image.Image.Width,
@@ -177,16 +119,16 @@ namespace Ege.Model
                     PixelFormat.Bgra,
                     PixelType.UnsignedByte,
                     data.Scan0);
-                }
-                else
-                {
-                    throw new Exception("Doku yükleme başarısız oldu!");
-                }
+
+                image.Image.UnlockBits(data);
             }
         }
 
-
-
-
+        public void Dispose()
+        {
+            if (disposed) return;
+            GL.DeleteTexture(Handle);
+            disposed = true;
+        }
     }
 }

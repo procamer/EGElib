@@ -53,7 +53,7 @@ namespace Ege
         public Camera(Vector3 position)
         {
             Position = position;
-            AspectRatio = 4 / 3;
+            AspectRatio = 4f / 3f;
             Sensitivity = 1.0f;
             Speed = 1.0f;
             Fov = 45.0f;
@@ -81,16 +81,6 @@ namespace Ege
             _right = Vector3.Normalize(Vector3.Cross(_front, Vector3.UnitY));
             _up = Vector3.Normalize(Vector3.Cross(_right, _front));
         }
-
-        public Vector3 GetRotation()
-        {
-            Vector3 Rotation = new Vector3(_pitch, _yaw, 0);
-            return Rotation;
-        }
-
-
-
-
 
     }
 }

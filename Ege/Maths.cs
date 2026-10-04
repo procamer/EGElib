@@ -36,17 +36,5 @@ namespace Ege
             return new Quaternion(quaternion.X, quaternion.Y, quaternion.Z, quaternion.W);
         }
 
-        internal static Matrix4 createViewMatrix(Camera camera)
-        {
-            Vector3 negativeR = Vector3.Multiply(camera.GetRotation(), -1.0f);
-            Vector3 negativeT = Vector3.Multiply(camera.Position, -1.0f);
-
-            Matrix4 matrix = Matrix4.CreateRotationX(negativeR.X) *
-                                         Matrix4.CreateRotationY(negativeR.Y) *
-                                         Matrix4.CreateRotationX(negativeR.X) *
-                                         Matrix4.CreateTranslation(negativeT);
-            return matrix;
-        }
-
     }
 }
